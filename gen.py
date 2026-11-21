@@ -1,278 +1,307 @@
-#!/usr/bin/env python3
-"""Draw the 21 November 2026 world-news front page (1024x1024 PNG).
+"""Front page for Saturday 21 November 2026, drawn from scratch with Pillow.
 
-Deterministic PIL renderer, broadsheet theme (tournament winner A).
-Usage: python3 gen.py [out.png]  --  no network, no inputs, fixed output.
+One 1024x1024 broadsheet: a navy hero on the missiles in Poland, two
+market/climate panels, three small panels, a twelve-item world-in-brief
+strip and a ticker. Every number on the page was checked against a
+20-21 November 2026 source before it was drawn. Deterministic: no
+clock, no random, no network.
 """
-import math
-import sys
-
+import os
 from PIL import Image, ImageDraw, ImageFont
 
-W = 1024
-H = 1024
-SERIF = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
-SANS = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
-SANSB = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-
-BG = (247, 242, 231)
-INK = (20, 33, 61)
-SUB = (84, 92, 110)
-ACCENT = (179, 0, 27)
-HERO = (20, 33, 61)
-HERO_TX = (247, 242, 231)
-PANEL = (255, 253, 246)
-GOLD = (198, 146, 20)
+W, H = 1024, 1024
+PAPER = (246, 240, 224)
+NAVY = (22, 35, 63)
+NAVY2 = (30, 48, 84)
+RED = (179, 32, 46)
+REDBRIGHT = (205, 45, 60)
+GOLD = (201, 151, 0)
+AMBER = (232, 178, 38)
+INK = (22, 35, 63)
+GREY = (92, 96, 104)
 WHITE = (255, 255, 255)
+CREAM = (250, 246, 236)
+SKY = (58, 102, 168)
+YEL = (240, 196, 55)
+
+FD = "/usr/share/fonts/truetype/dejavu"
+SERIF = os.path.join(FD, "DejaVuSerif-Bold.ttf")
+SERIF_R = os.path.join(FD, "DejaVuSerif.ttf")
+SANS = os.path.join(FD, "DejaVuSans.ttf")
+SANS_B = os.path.join(FD, "DejaVuSans-Bold.ttf")
 
 
-def F(path, size):
+def f(path, size):
     return ImageFont.truetype(path, size)
 
 
 def wrap(d, text, font, width):
-    words = text.split()
+    """Greedy word wrap; returns a list of lines that fit width."""
     lines, cur = [], ""
-    for w_ in words:
-        t = (cur + " " + w_).strip()
-        if d.textlength(t, font=font) <= width or not cur:
-            cur = t
+    for word in text.split():
+        trial = (cur + " " + word).strip()
+        if d.textlength(trial, font=font) <= width:
+            cur = trial
         else:
-            lines.append(cur)
-            cur = w_
+            if cur:
+                lines.append(cur)
+            cur = word
     if cur:
         lines.append(cur)
     return lines
 
 
-def text_block(d, x, y, text, font, fill, width, leading=1.16):
-    for ln in wrap(d, text, font, width):
-        d.text((x, y), ln, font=font, fill=fill)
-        y += int(font.size * leading)
+def para(d, x, y, text, font, fill, width, leading):
+    """Draw a wrapped paragraph; returns the y after the last line."""
+    for line in wrap(d, text, font, width):
+        d.text((x, y), line, font=font, fill=fill)
+        y += leading
     return y
 
 
-def star(d, cx, cy, r, fill, arms=8):
-    for i in range(arms):
-        a = 2 * math.pi * i / arms
-        d.line([cx, cy, cx + r * math.cos(a), cy + r * math.sin(a)],
-               fill=fill, width=5)
-    d.ellipse([cx - r * 0.32, cy - r * 0.32, cx + r * 0.32, cy + r * 0.32],
-              fill=fill)
+def card(d, box, fill, outline=None, width=2, radius=10):
+    d.rounded_rectangle(box, radius=radius, fill=fill,
+                        outline=outline, width=width)
 
 
-def dashed_arc(d, p0, p1, p2, fill, width=4, dash=13, gap=9):
-    pts = []
-    for i in range(91):
-        t = i / 90
-        x = (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t ** 2 * p2[0]
-        y = (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t ** 2 * p2[1]
-        pts.append((x, y))
-    acc = 0.0
-    for i in range(1, len(pts)):
-        if (acc % (dash + gap)) < dash:
-            d.line([pts[i - 1], pts[i]], fill=fill, width=width)
-        acc += math.dist(pts[i - 1], pts[i])
+def kicker(d, x, y, text, fill=RED, size=15):
+    d.text((x, y), text, font=f(SANS_B, size), fill=fill)
+    return y + size + 8
 
 
-def chip(d, x, y, big, small, wdt):
-    d.rounded_rectangle([x, y, x + wdt, y + 72], 10, fill=ACCENT)
-    d.text((x + 13, y + 5), big, font=F(SANSB, 29), fill=WHITE)
-    d.text((x + 13, y + 42), small, font=F(SANS, 15), fill=WHITE)
-    return x + wdt + 12
+def headline(d, x, y, text, font, fill, width, leading):
+    for line in wrap(d, text, font, width):
+        d.text((x, y), line, font=font, fill=fill)
+        y += leading
+    return y
 
 
-def hero(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 14, fill=HERO)
-    d.text((x0 + 26, y0 + 15), "WAR IN EUROPE  ·  NATO", font=F(SANSB, 19),
-           fill=GOLD)
-    y = text_block(d, x0 + 26, y0 + 42, "RUSSIAN MISSILES LAND IN POLAND",
-                   F(SERIF, 40), HERO_TX, 468, 1.08)
-    text_block(d, x0 + 26, y + 8,
-               "Two missiles and a drone came down on NATO soil during "
-               "Russia's huge overnight barrage on Ukraine. PM Tusk called "
-               "it \"a deliberate provocation\"; NATO chief Rutte flies to "
-               "Warsaw today as Poland seeks more Eastern Sentry forces.",
-               F(SANS, 18.5), HERO_TX, 458, 1.22)
-    cy = y1 - 84
-    nx = chip(d, x0 + 26, cy, "400+", "drones fired at Ukraine", 192)
-    nx = chip(d, nx, cy, "110", "missiles in one night", 172)
-    chip(d, nx, cy, "8+", "killed in Ukraine", 146)
-    mx0, my0, mx1, my1 = x0 + 524, y0 + 40, x1 - 24, y1 - 122
-    d.rounded_rectangle([mx0, my0, mx1, my1], 10, outline=HERO_TX, width=2)
-    pw = (mx1 - mx0) * 0.42
-    mid = my0 + (my1 - my0) / 2
-    d.rectangle([mx0 + 7, my0 + 7, mx0 + pw, mid], fill=(238, 240, 244))
-    d.rectangle([mx0 + 7, mid, mx0 + pw, my1 - 7], fill=(196, 30, 58))
-    d.rectangle([mx0 + pw + 5, my0 + 7, mx1 - 7, mid], fill=(74, 116, 172))
-    d.rectangle([mx0 + pw + 5, mid, mx1 - 7, my1 - 7], fill=(240, 198, 60))
-    d.text((mx0 + 18, my0 + 14), "POLAND", font=F(SANSB, 20), fill=INK)
-    d.text((mx0 + pw + 18, my0 + 14), "UKRAINE", font=F(SANSB, 20), fill=WHITE)
-    kyiv = (mx0 + pw + 62, my0 + 88)
-    d.ellipse([kyiv[0] - 6, kyiv[1] - 6, kyiv[0] + 6, kyiv[1] + 6], fill=WHITE)
-    d.text((kyiv[0] + 10, kyiv[1] - 10), "Kyiv", font=F(SANSB, 15), fill=WHITE)
-    hit1 = (mx0 + pw - 40, my0 + 122)
-    hit2 = (mx0 + pw - 92, my0 + 62)
-    dashed_arc(d, (mx1 - 14, my0 + 40), (mx0 + pw + 88, my0 - 24), hit1, ACCENT)
-    dashed_arc(d, (mx1 - 14, my0 + 116), (mx0 + pw + 26, my0 + 2), hit2, ACCENT)
-    star(d, hit1[0], hit1[1], 20, (255, 214, 10))
-    star(d, hit2[0], hit2[1], 15, (255, 214, 10))
-    d.text((hit1[0] - 126, hit1[1] + 22), "Kh-101 down near", font=F(SANS, 14),
-           fill=INK)
-    d.text((hit1[0] - 126, hit1[1] + 39), "Nowy Lipowiec", font=F(SANSB, 14),
-           fill=INK)
-    d.text((mx0 + 4, my1 + 10),
-           "No one hurt in Poland · two embassies hit in Kyiv",
-           font=F(SANS, 15.5), fill=HERO_TX)
+def masthead(d):
+    y = 22
+    d.text((26, y), "THE WORLD IN ONE DAY",
+           font=f(SERIF, 56), fill=NAVY)
+    d.text((880, y + 14), "No. 21", font=f(SERIF, 30), fill=GREY)
+    d.rectangle([26, 92, 998, 96], fill=NAVY)
+    d.rectangle([26, 100, 998, 104], fill=RED)
+    d.text((26, 112), "SATURDAY 21 NOVEMBER 2026",
+           font=f(SANS_B, 28), fill=RED)
+    d.text((640, 118), "21 stories  ·  6 regions  ·  one front page",
+           font=f(SANS, 17), fill=GREY)
+    return 152
 
 
-def markets(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 12, fill=PANEL, outline=INK, width=2)
-    d.text((x0 + 20, y0 + 13), "MARKETS  ·  NEW YORK", font=F(SANSB, 16),
-           fill=ACCENT)
-    d.text((x0 + 20, y0 + 34), "AI TRADE CRASHES:", font=F(SERIF, 26), fill=INK)
-    d.text((x0 + 20, y0 + 63), "INTO CORRECTION", font=F(SERIF, 26), fill=INK)
-    d.text((x0 + 330, y0 + 32), "-3.7%", font=F(SANSB, 44), fill=ACCENT)
-    d.text((x0 + 334, y0 + 80), "S&P 500 Friday", font=F(SANS, 14), fill=SUB)
-    gx0, gy0, gx1, gy1 = x0 + 22, y0 + 118, x0 + 240, y1 - 18
-    d.line([gx0, gy0, gx0, gy1], fill=SUB, width=2)
-    d.line([gx0, gy1, gx1, gy1], fill=SUB, width=2)
-    vals = [7430, 7380, 7300, 7176, 6910]
-    lo, hi = 6800, 7550
-    pts = []
-    for i, v in enumerate(vals):
-        px = gx0 + 8 + i * (gx1 - gx0 - 16) / (len(vals) - 1)
-        py = gy1 - (v - lo) / (hi - lo) * (gy1 - gy0)
-        pts.append((px, py))
-    d.line(pts, fill=ACCENT, width=5, joint="curve")
-    for p in pts:
-        d.ellipse([p[0] - 4, p[1] - 4, p[0] + 4, p[1] + 4], fill=ACCENT)
-    d.text((gx0 + 2, gy1 - 15), "Mon", font=F(SANS, 12), fill=SUB)
-    d.text((gx1 - 22, gy1 - 15), "Fri", font=F(SANS, 12), fill=SUB)
-    d.text((gx0 + 6, gy0 - 4), "7,430", font=F(SANS, 12), fill=SUB)
-    text_block(d, x0 + 262, y0 + 112,
-               "Nasdaq -5.3%, negative for the year. Nvidia -14%. Anthropic "
-               "-9% a day after its record IPO. Nikkei and Kospi fell 5%.",
-               F(SANS, 16), INK, x1 - x0 - 278, 1.2)
+def burst(d, cx, cy, r, fill=AMBER):
+    for ang in range(0, 360, 45):
+        import math
+        x2 = cx + int(r * math.cos(math.radians(ang)))
+        y2 = cy + int(r * math.sin(math.radians(ang)))
+        d.line([cx, cy, x2, y2], fill=fill, width=4)
+    d.ellipse([cx - 6, cy - 6, cx + 6, cy + 6], fill=fill)
 
 
-def cop31(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 12, fill=PANEL, outline=INK, width=2)
-    d.text((x0 + 20, y0 + 13), "CLIMATE  ·  ANTALYA", font=F(SANSB, 16),
-           fill=ACCENT)
-    d.text((x0 + 20, y0 + 34), "COP31 RUNS INTO", font=F(SERIF, 26), fill=INK)
-    d.text((x0 + 20, y0 + 63), "OVERTIME", font=F(SERIF, 26), fill=INK)
-    cx, cy, r = x0 + 64, y0 + 158, 38
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=INK, width=3)
-    d.ellipse([cx - r, cy - 12, cx + r, cy + 12], outline=INK, width=2)
-    d.line([cx - r, cy, cx + r, cy], fill=INK, width=2)
-    for dx in (-19, 0, 19):
-        d.arc([cx + dx - 25, cy - r, cx + dx + 25, cy + r], 90, 270,
-              fill=INK, width=2)
-    tx = x0 + 122
-    d.text((tx, y0 + 106), "1.5°C", font=F(SANSB, 38), fill=ACCENT)
-    text_block(d, tx, y0 + 150,
-               "Draft deal drops fossil fuels; first COP text to admit the "
-               "Paris limit will be overshot. ~200 nations talk on into "
-               "the weekend.", F(SANS, 15.5), INK, x1 - tx - 14, 1.2)
+def hero(d, y0):
+    x0, x1, h = 26, 998, 292
+    card(d, [x0, y0, x1, y0 + h], NAVY, radius=12)
+    # left column: kicker, headline, body, casualty chips
+    lx, lw = 48, 430
+    kicker(d, lx, y0 + 18, "WAR IN EUROPE  ·  NATO", fill=GOLD, size=15)
+    yy = headline(d, lx, y0 + 44, "RUSSIAN MISSILES LAND IN POLAND",
+                  f(SERIF, 38), WHITE, lw, 44)
+    body = ("Two missiles and a drone came down on NATO soil in "
+            "Russia's overnight barrage on Ukraine. PM Tusk called it "
+            "\u201ca deliberate provocation\u201d; NATO chief Rutte flies "
+            "to Warsaw today.")
+    yy = para(d, lx, yy + 4, body, f(SANS, 14), (226, 232, 240), lw, 18)
+    # casualty chips: number on top, label below, inside the chip
+    cy = y0 + h - 56
+    for cx, cw, big, small in [(lx, 132, "8+", "killed in Ukraine"),
+                               (lx + 142, 168, "2",
+                                "embassies hit in Kyiv")]:
+        card(d, [cx, cy, cx + cw, cy + 44], REDBRIGHT, radius=8)
+        d.text((cx + 12, cy + 4), big, font=f(SANS_B, 18), fill=WHITE)
+        d.text((cx + 12, cy + 24), small, font=f(SANS, 11), fill=WHITE)
+    d.text((lx + 322, cy + 6), "No one hurt\nin Poland",
+           font=f(SANS_B, 13), fill=(226, 232, 240))
+    # right column: schematic map + barrage bars
+    mx, my, mw, mh = 512, y0 + 18, 462, 168
+    card(d, [mx, my, mx + mw, my + mh], WHITE, radius=8)
+    # Poland (left) / Ukraine (right), split at x=300 inside the box
+    d.rectangle([mx + 2, my + 2, mx + 298, my + mh - 2], fill=(238, 240, 244))
+    d.rectangle([mx + 300, my + 2, mx + mw - 2, my + 84], fill=SKY)
+    d.rectangle([mx + 300, my + 86, mx + mw - 2, my + mh - 2], fill=YEL)
+    d.text((mx + 14, my + 8), "POLAND", font=f(SANS_B, 16), fill=NAVY)
+    d.text((mx + 312, my + 8), "UKRAINE", font=f(SANS_B, 16), fill=WHITE)
+    d.text((mx + 312, my + 30), "BELARUS", font=f(SANS, 11), fill=(210, 220, 235))
+    d.text((mx + 388, my + 118), "RUSSIA", font=f(SANS, 11), fill=(120, 90, 40))
+    d.ellipse([mx + 372, my + 96, mx + 382, my + 106], fill=WHITE)
+    d.text((mx + 388, my + 94), "Kyiv", font=f(SANS_B, 13), fill=NAVY)
+    d.text((mx + 330, my + 38), "Nowa D\u0119ba drills", font=f(SANS_B, 11),
+           fill=WHITE)
+    # dashed red arc from Ukraine down into Poland, below the BELARUS label
+    for i in range(12):
+        t = i / 11.0
+        ax = mx + 440 - int(260 * t)
+        ay = my + 52 + int(48 * t * t)
+        d.ellipse([ax, ay, ax + 7, ay + 4], fill=RED)
+    burst(d, mx + 210, my + 96, 16)
+    burst(d, mx + 120, my + 60, 12)
+    d.ellipse([mx + 168, my + 128, mx + 176, my + 136], fill=AMBER)
+    d.text((mx + 14, my + mh - 42), "Kh-101 down near", font=f(SANS, 12),
+           fill=RED)
+    d.text((mx + 14, my + mh - 26), "Nowy Lipowiec", font=f(SANS_B, 13),
+           fill=RED)
+    d.text((mx + 296, my + mh - 26), "Rudnik nad Sanem \u00b7 Mo\u0142odycz",
+           font=f(SANS, 10), fill=(90, 70, 20))
+    # barrage bars under the map
+    by = my + mh + 12
+    d.text((mx, by), "THE BARRAGE IN ONE NIGHT",
+           font=f(SANS_B, 13), fill=GOLD)
+    by += 20
+    for label, val, frac in [("Drones", "400+", 1.0),
+                             ("Missiles", "110", 0.28)]:
+        d.text((mx, by), label, font=f(SANS, 13), fill=(226, 232, 240))
+        d.rectangle([mx + 74, by + 2, mx + 74 + int(300 * frac), by + 14],
+                    fill=REDBRIGHT)
+        d.text((mx + 382, by - 1), val, font=f(SANS_B, 14), fill=WHITE)
+        by += 22
+    return y0 + h
 
 
-def ukeu(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 12, fill=PANEL, outline=INK, width=2)
-    d.text((x0 + 18, y0 + 11), "BRUSSELS SUMMIT", font=F(SANSB, 15),
-           fill=ACCENT)
-    d.text((x0 + 18, y0 + 30), "UK-EU RESET:", font=F(SERIF, 23), fill=INK)
-    d.text((x0 + 18, y0 + 55), "THREE DEALS SIGNED", font=F(SERIF, 23),
-           fill=INK)
-    cy = y0 + 106
-    d.ellipse([x0 + 20, cy - 24, x0 + 68, cy + 24], fill=(1, 33, 105))
-    d.text((x0 + 29, cy - 12), "UK", font=F(SANSB, 18), fill=WHITE)
-    d.ellipse([x0 + 88, cy - 24, x0 + 136, cy + 24], fill=(0, 51, 153))
-    for i in range(6):
-        a = 2 * math.pi * i / 6
-        sx, sy = x0 + 112 + 14 * math.cos(a), cy + 14 * math.sin(a)
-        d.ellipse([sx - 2.4, sy - 2.4, sx + 2.4, sy + 2.4], fill=(255, 204, 0))
-    d.text((x0 + 152, cy - 26), "£5.1bn", font=F(SANSB, 29), fill=INK)
-    d.text((x0 + 152, cy + 6), "a year: food deal", font=F(SANS, 14), fill=SUB)
-    text_block(d, x0 + 18, y0 + 138,
-               "Food checks end, carbon markets link, youth mobility for "
-               "100,000 a year.", F(SANS, 15), INK,
-               x1 - x0 - 34, 1.2)
+def slope_chart(d, x, y, w, h, label, start, end, pct):
+    """Two-point week chart: only the verified Mon/Fri closes, joined.
+    High price sits at the top, so a falling week slopes down."""
+    d.rectangle([x, y, x + w, y + h], outline=(190, 190, 185), width=1)
+    d.line([x + 6, y + 12, x + w - 6, y + h - 10], fill=RED, width=3)
+    d.ellipse([x + 2, y + 8, x + 10, y + 16], fill=RED)
+    d.ellipse([x + w - 10, y + h - 14, x + w - 2, y + h - 6], fill=RED)
+    d.text((x + 4, y + 20), start, font=f(SANS, 11), fill=GREY)
+    d.text((x + w - 54, y + h - 40), end, font=f(SANS, 11), fill=GREY)
+    d.text((x, y + h + 4), label, font=f(SANS_B, 12), fill=NAVY)
+    d.text((x + w - 52, y + h + 4), pct, font=f(SANS_B, 12), fill=RED)
 
 
-def akvan(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 12, fill=PANEL, outline=INK, width=2)
-    d.text((x0 + 18, y0 + 11), "CYCLONE  ·  INDIA", font=F(SANSB, 15),
-           fill=ACCENT)
-    d.text((x0 + 18, y0 + 30), "AKVAN SPARES", font=F(SERIF, 23), fill=INK)
-    d.text((x0 + 18, y0 + 55), "ODISHA", font=F(SERIF, 23), fill=INK)
-    cx, cy = x0 + 54, y0 + 108
-    for rr, a0 in ((32, 20), (23, 150), (15, 280)):
-        d.arc([cx - rr, cy - rr, cx + rr, cy + rr], a0, a0 + 250,
-              fill=ACCENT, width=5)
-    d.ellipse([cx - 5, cy - 5, cx + 5, cy + 5], fill=ACCENT)
-    d.text((x0 + 102, y0 + 84), "372,000", font=F(SANSB, 30), fill=INK)
-    d.text((x0 + 102, y0 + 118), "evacuated; no deaths", font=F(SANS, 14),
-           fill=SUB)
-    text_block(d, x0 + 18, y0 + 138,
-               "209 mm of rain in a day; 1,450 babies born safe in storm "
-               "shelters.", F(SANS, 15), INK, x1 - x0 - 34, 1.2)
+def markets_climate(d, y0):
+    h = 194
+    # markets panel
+    card(d, [26, y0, 512, y0 + h], WHITE, outline=NAVY, width=2, radius=10)
+    kicker(d, 44, y0 + 12, "MARKETS  ·  NEW YORK", size=14)
+    headline(d, 44, y0 + 34, "AI TRADE CRASHES: INTO CORRECTION",
+             f(SERIF, 24), NAVY, 300, 28)
+    d.text((360, y0 + 34), "-3.7%", font=f(SANS_B, 40), fill=RED)
+    d.text((362, y0 + 78), "S&P 500 Friday", font=f(SANS, 13), fill=GREY)
+    slope_chart(d, 44, y0 + 100, 200, 48, "S&P 500  Mon \u2192 Fri",
+                "7,562", "6,910", "-8.6% wk")
+    slope_chart(d, 272, y0 + 100, 200, 48, "Nasdaq  Mon \u2192 Fri",
+                "25,137", "22,618", "-10.0% wk")
+    d.text((44, y0 + 176),
+           "Nasdaq -5.3% Fri, worst week since Mar 2020. Nvidia -14% Fri.",
+           font=f(SANS, 12), fill=GREY)
+    # climate panel
+    card(d, [528, y0, 998, y0 + h], WHITE, outline=NAVY, width=2, radius=10)
+    kicker(d, 546, y0 + 12, "CLIMATE  ·  ANTALYA", size=14)
+    headline(d, 546, y0 + 34, "COP31 RUNS INTO OVERTIME",
+             f(SERIF, 24), NAVY, 300, 28)
+    d.ellipse([548, y0 + 104, 622, y0 + 178], outline=NAVY, width=3)
+    d.ellipse([560, y0 + 112, 610, y0 + 170], outline=NAVY, width=2)
+    d.line([548, y0 + 141, 622, y0 + 141], fill=NAVY, width=2)
+    d.text((640, y0 + 100), "1.5\u00b0C", font=f(SANS_B, 40), fill=RED)
+    para(d, 640, y0 + 148,
+         "Draft deal drops fossil fuels; first COP text to admit the "
+         "Paris limit will be overshot.",
+         f(SANS, 13), INK, 330, 17)
+    return y0 + h
 
 
-def mongolia(d, box):
-    x0, y0, x1, y1 = box
-    d.rounded_rectangle(box, 12, fill=PANEL, outline=INK, width=2)
-    d.text((x0 + 18, y0 + 11), "ULAANBAATAR", font=F(SANSB, 15), fill=ACCENT)
-    d.text((x0 + 18, y0 + 30), "PRESIDENT QUITS", font=F(SERIF, 23), fill=INK)
-    d.text((x0 + 18, y0 + 55), "— A FIRST", font=F(SERIF, 23), fill=INK)
-    base = y0 + 128
-    d.polygon([(x0 + 22, base), (x0 + 74, y0 + 92), (x0 + 120, base)],
-              fill=(110, 132, 160))
-    d.polygon([(x0 + 92, base), (x0 + 142, y0 + 98), (x0 + 186, base)],
-              fill=(84, 104, 128))
-    d.text((x0 + 200, y0 + 90), "96 of 104", font=F(SANSB, 21), fill=INK)
-    d.text((x0 + 200, y0 + 114), "MPs backed it", font=F(SANS, 13), fill=SUB)
-    text_block(d, x0 + 18, y0 + 138,
-               "Khurelsukh Ukhnaa steps down amid graft claims; an early "
-               "election follows.", F(SANS, 15), INK, x1 - x0 - 34, 1.2)
+def small_panels(d, y0):
+    h = 156
+    cols = [(26, 318, "BRUSSELS SUMMIT", "UK-EU RESET: THREE DEALS SIGNED",
+             "\u00a35.1bn", "a year: food deal",
+             "Food checks end, carbon markets link, youth mobility for "
+             "100,000 a year."),
+            (360, 318, "CYCLONE  ·  INDIA", "AKVAN SPARES ODISHA",
+             "372,000", "evacuated; no deaths",
+             "209 mm of rain in a day; 1,450 babies born safe in storm "
+             "shelters."),
+            (694, 278, "ULAANBAATAR", "PRESIDENT QUITS \u2014 A FIRST",
+             "96 of 104", "MPs backed it",
+             "Khurelsukh Ukhnaa steps down amid graft claims; an early "
+             "election follows.")]
+    for x, w, kick, head, big, sub, body in cols:
+        card(d, [x, y0, x + w, y0 + h], WHITE, outline=NAVY, width=2,
+             radius=10)
+        kicker(d, x + 16, y0 + 10, kick, size=13)
+        headline(d, x + 16, y0 + 30, head, f(SERIF, 19), NAVY, w - 32, 22)
+        d.text((x + 16, y0 + 80), big, font=f(SANS_B, 26), fill=NAVY)
+        d.text((x + 16, y0 + 108), sub, font=f(SANS, 12), fill=GREY)
+        para(d, x + 16, y0 + 124, body, f(SANS, 11), INK, w - 32, 12)
+    return y0 + h
 
 
-def build(out):
-    img = Image.new("RGB", (W, H), BG)
+BRIEF = [
+    ("DENMARK", "Plot to kill rapper Kyivstoner foiled; attach\u00e9 expelled."),
+    ("CUBA", "US teacher freed after nearly 10 years detained."),
+    ("INDIA\u2013JAPAN", "Japanese troops to drill missiles on Indian ranges."),
+    ("GOLD", "\u22129.5% in a week to $3,512; worst week in 8 months."),
+    ("KRYVYI RIH", "Strike kills 2, injures 42, incl. 4 children."),
+    ("BRITAIN", "1,000+ drones for Ukraine in \u00a3260m package."),
+    ("HORMUZ", "Tanker strike and fire in the strait (UKMTO)."),
+    ("SPACE", "JAXA drops Hayabusa2's 2031 asteroid landing."),
+    ("BRAZIL", "Ex-president Bolsonaro taken to hospital."),
+    ("SIBERIA", "Military plane crash kills all 17 aboard."),
+    ("CYBER", "JPMorgan, Visa, Mastercard hit via vendors."),
+    ("PAKISTAN", "Suicide bombing at checkpoint kills 5, injures 13."),
+]
+
+
+def brief_strip(d, y0):
+    h = 126
+    card(d, [26, y0, 998, y0 + h], CREAM, outline=NAVY, width=2, radius=10)
+    d.text((44, y0 + 8), "WORLD IN BRIEF \u2014 12 MORE STORIES",
+           font=f(SANS_B, 15), fill=RED)
+    cell_w, cell_h = 232, 30
+    for i, (lead, text) in enumerate(BRIEF):
+        col, row = i % 4, i // 4
+        x = 44 + col * 238
+        y = y0 + 32 + row * 32
+        full = lead + " \u2014 " + text
+        lines = wrap(d, full, f(SANS, 12), cell_w)
+        d.text((x, y), lines[0], font=f(SANS, 12), fill=INK)
+        if len(lines) > 1:
+            d.text((x, y + 14), lines[1], font=f(SANS, 12), fill=INK)
+    return y0 + h
+
+
+def footer(d, y0):
+    d.rectangle([26, y0, 998, y0 + 30], fill=NAVY)
+    d.text((40, y0 + 7), "ALSO TODAY",
+           font=f(SANS_B, 13), fill=GOLD)
+    d.text((150, y0 + 7),
+           "Cricket: India 159/1 trail NZ by 209 in Wellington  \u00b7  "
+           "EU OKs \u20ac1bn arms aid for Ukraine  \u00b7  US sanctions "
+           "4 Iranians",
+           font=f(SANS, 13), fill=WHITE)
+    d.text((26, y0 + 38),
+           "Sources: AP \u00b7 Reuters \u00b7 UN News \u00b7 IMD \u00b7 WSJ "
+           "\u00b7 BBC \u00b7 CNN \u00b7 Morningstar \u2014 reported "
+           "20\u201321 November 2026",
+           font=f(SANS, 12), fill=GREY)
+    return y0 + 56
+
+
+def build(out_path):
+    img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
-    d.text((28, 18), "THE WORLD IN ONE DAY", font=F(SERIF, 57), fill=INK)
-    d.text((W - 28, 28), "No. 21", font=F(SERIF, 30), fill=SUB, anchor="ra")
-    d.line([28, 90, W - 28, 90], fill=INK, width=5)
-    d.text((28, 100), "SATURDAY 21 NOVEMBER 2026", font=F(SANSB, 31),
-           fill=ACCENT)
-    d.text((W - 28, 106), "Six stories that shaped the day", font=F(SANS, 19),
-           fill=SUB, anchor="ra")
-    d.line([28, 144, W - 28, 144], fill=INK, width=2)
-    hero(d, (28, 158, W - 28, 520))
-    markets(d, (28, 536, 506, 758))
-    cop31(d, (522, 536, W - 28, 758))
-    ukeu(d, (28, 774, 344, 950))
-    akvan(d, (356, 774, 672, 950))
-    mongolia(d, (684, 774, W - 28, 950))
-    d.rectangle([28, 960, W - 28, 994], fill=INK)
-    d.text((42, 968), "ALSO TODAY", font=F(SANSB, 15.5), fill=GOLD)
-    d.text((166, 969),
-           "Cricket: India 159/1 trail NZ by 209 in Wellington  ·  EU OKs "
-           "€1bn arms aid for Ukraine  ·  US sanctions 4 Iranians",
-           font=F(SANS, 15), fill=BG)
-    d.text((28, 999),
-           "Sources: AP · Reuters · UN News · IMD · WSJ · BBC — reported "
-           "20-21 November 2026", font=F(SANS, 13.5), fill=SUB)
-    img.save(out, optimize=True)
-    return out
+    y = masthead(d)
+    y = hero(d, y + 8)
+    y = markets_climate(d, y + 10)
+    y = small_panels(d, y + 10)
+    y = brief_strip(d, y + 10)
+    y = footer(d, y + 8)
+    assert y <= H, f"layout overflow: {y}"
+    img.save(out_path, "PNG", optimize=True)
 
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "entry.png"
-    build(out)
-    print("wrote", out)
+    target = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    os.makedirs(target, exist_ok=True)
+    build(os.path.join(target, "entry.png"))
