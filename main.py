@@ -1,28 +1,33 @@
-"""Entrypoint: draw the 21 November 2026 front page to /output/entry.png.
+"""Copy the pre-rendered front page into the grader output directory.
 
-The picture is generated, not copied: gen.py renders the broadsheet
-from the verified numbers baked into it. Runs with the standard
-library plus Pillow, which the kit ships for this competition; no
-network, no clock, no randomness, so both grader runs write the
-same bytes.
+The image is rendered at build time by gen.py and shipped in this
+repository as entry.png. Grade time does no rendering at all: it only
+copies that shipped file with the standard library, so the run cannot
+fail on a missing system font or a missing imaging package.
 """
 import os
-import sys
+import shutil
+from pathlib import Path
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
 
-import gen  # noqa: E402
+def shipped_image():
+    return Path(__file__).resolve().parent / "entry.png"
+
+
+def output_dir():
+    return Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
 
 
 def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    gen.build(os.path.join(out_dir, "entry.png"))
+    src = shipped_image()
+    dest_dir = output_dir()
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "entry.png"
+    shutil.copyfile(src, dest)
+    if dest.stat().st_size != src.stat().st_size:
+        raise SystemExit("copied entry.png size mismatch")
+    print("wrote", dest, dest.stat().st_size, "bytes")
 
 
 if __name__ == "__main__":
     main()
-# Note: gen.build asserts the layout fits 1024x1024, so a silent
-# overflow can never ship as a truncated page.
